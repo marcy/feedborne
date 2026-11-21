@@ -4,7 +4,7 @@ import "strconv"
 
 templ IndexPage(data pageData) {
 	<!DOCTYPE html>
-	<html lang={ string(data.Lang) }>
+	<html lang={ string(data.Lang) } data-theme={ string(data.Theme) }>
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -21,6 +21,13 @@ templ IndexPage(data pageData) {
 					<a href="/lang?set=en" class={ templ.KV("current", data.Lang == LangEN) }>EN</a>
 					|
 					<a href="/lang?set=ja" class={ templ.KV("current", data.Lang == LangJA) }>日本語</a>
+				</span>
+				<span class="theme">
+					<a href="/theme?set=dark" class={ templ.KV("current", data.Theme == ThemeDark) }>Dark</a>
+					|
+					<a href="/theme?set=light" class={ templ.KV("current", data.Theme == ThemeLight) }>Light</a>
+					|
+					<a href="/theme?set=sepia" class={ templ.KV("current", data.Theme == ThemeSepia) }>Sepia</a>
 				</span>
 			</header>
 			@FeedsBar(data.Feeds, data.Msg)

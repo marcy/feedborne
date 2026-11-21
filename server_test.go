@@ -76,7 +76,7 @@ func TestIndexPage(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", code)
 	}
-	for _, want := range []string{"FEEDBORNE", "Hello Entry", "/static/htmx.min.js", "/static/style.css", "/static/app.js", "未読 1 件", `lang="ja"`, "フィード追加", "次へ"} {
+	for _, want := range []string{"FEEDBORNE", "Hello Entry", "/static/htmx.min.js", "/static/style.css", "/static/app.js", "未読 1 件", `lang="ja"`, `data-theme="dark"`, "フィード追加", "次へ"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("ja index should contain %q", want)
 		}
@@ -222,6 +222,45 @@ func TestLangSwitch(t *testing.T) {
 	for _, c := range resp2.Cookies() {
 		if c.Name == "lang" && c.Value != "en" {
 			t.Errorf("invalid set value should fall back to en, got %q", c.Value)
+		}
+	}
+}
+
+func TestThemeSwitch(t *testing.T) {
+	srv, _ := testServer(t)
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.Get(srv.URL + "/theme?set=sepia")
+	if err != nil {
+		t.Fatalf("GET /theme: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", resp.StatusCode)
+	}
+	var themeCookie *http.Cookie
+	for _, c := range resp.Cookies() {
+		if c.Name == "theme" {
+			themeCookie = c
+		}
+	}
+	if themeCookie == nil || themeCookie.Value != "sepia" {
+		t.Fatalf("expected theme=sepia cookie, got %v", resp.Cookies())
+	}
+	_, body := getWith(t, srv.URL+"/", "", themeCookie)
+	if !strings.Contains(body, `data-theme="sepia"`) {
+		t.Error("index with theme cookie should render the sepia theme")
+	}
+
+	resp2, err := client.Get(srv.URL + "/theme?set=neon")
+	if err != nil {
+		t.Fatalf("GET /theme bad value: %v", err)
+	}
+	defer resp2.Body.Close()
+	for _, c := range resp2.Cookies() {
+		if c.Name == "theme" && c.Value != "dark" {
+			t.Errorf("invalid set value should fall back to dark, got %q", c.Value)
 		}
 	}
 }
