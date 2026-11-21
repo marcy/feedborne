@@ -4,7 +4,7 @@ import "strconv"
 
 templ IndexPage(data pageData) {
 	<!DOCTYPE html>
-	<html lang="ja">
+	<html lang={ string(data.Lang) }>
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -15,18 +15,23 @@ templ IndexPage(data pageData) {
 		<body>
 			<header>
 				<h1>FEEDBORNE</h1>
-				<span class="unread" id="unread">未読 { strconv.Itoa(data.Unread) } 件</span>
-				<span class="keys"><kbd>j</kbd> 次へ <kbd>k</kbd> 前へ <kbd>o</kbd> 別タブで開く</span>
+				<span class="unread" id="unread">{ data.Msg.UnreadText(data.Unread) }</span>
+				<span class="keys"><kbd>j</kbd> { data.Msg.KeyNext } <kbd>k</kbd> { data.Msg.KeyPrev } <kbd>o</kbd> { data.Msg.KeyOpen }</span>
+				<span class="lang">
+					<a href="/lang?set=en" class={ templ.KV("current", data.Lang == LangEN) }>EN</a>
+					|
+					<a href="/lang?set=ja" class={ templ.KV("current", data.Lang == LangJA) }>日本語</a>
+				</span>
 			</header>
-			@FeedsBar(data.Feeds)
+			@FeedsBar(data.Feeds, data.Msg)
 			<main id="list">
 				if len(data.Entries) == 0 {
-					<div class="empty">まだ記事がありません。フィードを追加して <code>feedborne crawl</code> を実行してください。</div>
+					<div class="empty">{ data.Msg.EmptyLead }<code>feedborne crawl</code>{ data.Msg.EmptyTail }</div>
 				}
 				for _, e := range data.Entries {
 					@EntryItem(e)
 				}
-				@MoreButton(data.HasMore, data.NextOffset)
+				@MoreButton(data.HasMore, data.NextOffset, data.Msg)
 			</main>
 			<script src="/static/app.js"></script>
 		</body>
@@ -43,9 +48,9 @@ templ EntryItem(e Entry) {
 	</article>
 }
 
-templ MoreButton(hasMore bool, nextOffset int) {
+templ MoreButton(hasMore bool, nextOffset int, msg Messages) {
 	if hasMore {
-		<div class="more"><button type="button" hx-get={ "/entries?offset=" + strconv.Itoa(nextOffset) } hx-target="closest div" hx-swap="outerHTML">もっと読む</button></div>
+		<div class="more"><button type="button" hx-get={ "/entries?offset=" + strconv.Itoa(nextOffset) } hx-target="closest div" hx-swap="outerHTML">{ msg.LoadMore }</button></div>
 	}
 }
 
@@ -53,10 +58,10 @@ templ EntriesFrag(frag fragData) {
 	for _, e := range frag.Entries {
 		@EntryItem(e)
 	}
-	@MoreButton(frag.HasMore, frag.NextOffset)
+	@MoreButton(frag.HasMore, frag.NextOffset, frag.Msg)
 }
 
-templ FeedsBar(feeds []Feed) {
+templ FeedsBar(feeds []Feed, msg Messages) {
 	<div class="feeds" id="feedsbar">
 		for _, f := range feeds {
 			<span class="name">
@@ -69,7 +74,7 @@ templ FeedsBar(feeds []Feed) {
 		}
 		<form hx-post="/feeds" hx-target="#feedsbar" hx-swap="outerHTML">
 			<input type="url" name="url" placeholder="https://example.com/feed.rss" required="required"/>
-			<button type="submit">フィード追加</button>
+			<button type="submit">{ msg.AddFeed }</button>
 		</form>
 	</div>
 }
