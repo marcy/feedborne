@@ -7,6 +7,16 @@ A small RSS reader written in Go.
 - Frontend: server-rendered HTML with templ (type-safe, compiled to Go) + htmx (vendored, no CDN) for partial updates and a pinch of vanilla JS for the keyboard UI.
 - Keyboard-driven reading: `j` / `k` move the selection, `o` opens the entry in a new tab (and marks it read)
 
+## Development
+
+The Go toolchain is pinned with [mise](https://mise.jdx.dev) in `mise.toml`:
+
+```sh
+mise install   # install the pinned Go version
+```
+
+sqlc, templ and Task are installed separately (see the Taskfile for how they are driven).
+
 ## Usage
 
 Common workflows are in the Taskfile:
