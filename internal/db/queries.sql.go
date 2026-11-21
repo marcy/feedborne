@@ -54,8 +54,13 @@ SELECT e.id, e.feed_id, f.title AS feed_title, e.guid, e.url, e.title,
 FROM entries e
 JOIN feeds f ON f.id = e.feed_id
 ORDER BY COALESCE(e.published_at, e.fetched_at) DESC, e.id DESC
-LIMIT ?
+LIMIT ? OFFSET ?
 `
+
+type LatestEntriesParams struct {
+	Limit  int64
+	Offset int64
+}
 
 type LatestEntriesRow struct {
 	ID          int64
@@ -69,8 +74,8 @@ type LatestEntriesRow struct {
 	Read        int64
 }
 
-func (q *Queries) LatestEntries(ctx context.Context, limit int64) ([]LatestEntriesRow, error) {
-	rows, err := q.db.QueryContext(ctx, latestEntries, limit)
+func (q *Queries) LatestEntries(ctx context.Context, arg LatestEntriesParams) ([]LatestEntriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, latestEntries, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

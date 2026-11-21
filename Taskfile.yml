@@ -26,6 +26,7 @@ tasks:
       - ./internal/db/*.go
       - ./templates/*.html
       - ./db/*.sql
+      - ./static/*
     generates:
       - ./{{.BIN}}
 

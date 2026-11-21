@@ -21,7 +21,7 @@ SELECT e.id, e.feed_id, f.title AS feed_title, e.guid, e.url, e.title,
 FROM entries e
 JOIN feeds f ON f.id = e.feed_id
 ORDER BY COALESCE(e.published_at, e.fetched_at) DESC, e.id DESC
-LIMIT ?;
+LIMIT ? OFFSET ?;
 
 -- name: MarkRead :exec
 UPDATE entries SET read = 1 WHERE id = ?;

@@ -98,8 +98,11 @@ func updateFeedAfterFetch(database *sql.DB, f Feed, title, etag, lastMod string)
 	})
 }
 
-func latestEntries(database *sql.DB, limit int) ([]Entry, error) {
-	rows, err := queries(database).LatestEntries(context.Background(), int64(limit))
+func latestEntries(database *sql.DB, limit, offset int) ([]Entry, error) {
+	rows, err := queries(database).LatestEntries(context.Background(), db.LatestEntriesParams{
+		Limit:  int64(limit),
+		Offset: int64(offset),
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>feedborne</title>
+<script src="/static/htmx.min.js"></script>
 <style>
   :root {
     --bg: #101014;
@@ -63,44 +64,56 @@
     box-shadow: inset 3px 0 0 var(--gold);
   }
   .empty { color: var(--muted); padding: 40px 0; text-align: center; }
+  .more { text-align: center; padding: 18px 0; }
+  .more button {
+    background: var(--panel); border: 1px solid var(--gold-dim); color: var(--gold);
+    border-radius: 4px; padding: 8px 22px; cursor: pointer; font-size: 14px;
+  }
 </style>
 </head>
 <body>
 <header>
   <h1>FEEDBORNE</h1>
-  <span class="unread">未読 {{.Unread}} 件</span>
+  <span class="unread" id="unread">未読 {{.Unread}} 件</span>
   <span class="keys"><kbd>j</kbd> 次へ <kbd>k</kbd> 前へ <kbd>o</kbd> 別タブで開く</span>
 </header>
-<div class="feeds">
-  {{range .Feeds}}<span class="name">{{if .Title}}{{.Title}}{{else}}{{.URL}}{{end}}</span>{{end}}
-  <form method="post" action="/feeds">
-    <input type="url" name="url" placeholder="https://example.com/feed.rss" required>
-    <button type="submit">フィード追加</button>
-  </form>
-</div>
+{{template "feedsbar" .Feeds}}
 <main id="list">
-  {{range .Entries}}
-  <article class="entry{{if .Read}} read{{end}}" data-id="{{.ID}}" data-url="{{.URL}}">
-    <div class="meta"><span>{{.FeedTitle}}</span><span>{{fmtTime .PublishedAt}}</span></div>
-    <h2><a href="{{.URL}}" target="_blank" rel="noopener">{{.Title}}</a></h2>
-    {{if .Description}}<p>{{short .Description 140}}</p>{{end}}
-  </article>
-  {{else}}
-  <div class="empty">まだ記事がありません。<code>feedborne crawl</code> を実行してください。</div>
+  {{range .Entries}}{{template "entry" .}}{{else}}
+  <div class="empty">まだ記事がありません。フィードを追加して <code>feedborne crawl</code> を実行してください。</div>
   {{end}}
+  {{template "more" .}}
 </main>
 <script>
 (function () {
-  var entries = Array.prototype.slice.call(document.querySelectorAll('.entry'));
-  if (!entries.length) return;
+  var entries = [];
   var idx = 0;
+  function collect() {
+    var current = entries[idx];
+    entries = Array.prototype.slice.call(document.querySelectorAll('.entry'));
+    if (current && entries.indexOf(current) >= 0) {
+      idx = entries.indexOf(current);
+    }
+    if (idx >= entries.length) idx = Math.max(0, entries.length - 1);
+  }
   function select(i) {
+    if (!entries.length) return;
     entries[idx].classList.remove('selected');
     idx = Math.max(0, Math.min(entries.length - 1, i));
     entries[idx].classList.add('selected');
     entries[idx].scrollIntoView({ block: 'nearest' });
   }
-  entries[0].classList.add('selected');
+  collect();
+  if (entries.length) entries[0].classList.add('selected');
+  document.body.addEventListener('htmx:afterSwap', function () {
+    var had = entries[idx];
+    collect();
+    entries.forEach(function (el) { el.classList.remove('selected'); });
+    if (entries.length) {
+      if (had && entries.indexOf(had) >= 0) idx = entries.indexOf(had);
+      entries[idx].classList.add('selected');
+    }
+  });
   document.addEventListener('keydown', function (e) {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (e.key === 'j') {
@@ -109,15 +122,43 @@
       select(idx - 1);
     } else if (e.key === 'o') {
       var el = entries[idx];
-      var url = el.getAttribute('data-url');
-      var id = el.getAttribute('data-id');
-      window.open(url, '_blank', 'noopener');
+      if (!el) return;
+      window.open(el.getAttribute('data-url'), '_blank', 'noopener');
       el.classList.add('read');
-      var body = new URLSearchParams({ id: id });
-      fetch('/read', { method: 'POST', body: body }).catch(function () {});
+      htmx.ajax('POST', '/read', {
+        values: { id: el.getAttribute('data-id') },
+        target: '#unread',
+        swap: 'innerHTML'
+      });
     }
   });
 })();
 </script>
 </body>
 </html>
+
+{{define "entry"}}
+<article class="entry{{if .Read}} read{{end}}" data-id="{{.ID}}" data-url="{{.URL}}">
+  <div class="meta"><span>{{.FeedTitle}}</span><span>{{fmtTime .PublishedAt}}</span></div>
+  <h2><a href="{{.URL}}" target="_blank" rel="noopener">{{.Title}}</a></h2>
+  {{if .Description}}<p>{{short .Description 140}}</p>{{end}}
+</article>
+{{end}}
+
+{{define "more"}}
+{{if .HasMore}}<div class="more"><button type="button" hx-get="/entries?offset={{.NextOffset}}" hx-target="closest div" hx-swap="outerHTML">もっと読む</button></div>{{end}}
+{{end}}
+
+{{define "entries"}}
+{{range .Entries}}{{template "entry" .}}{{end}}{{template "more" .}}
+{{end}}
+
+{{define "feedsbar"}}
+<div class="feeds" id="feedsbar">
+  {{range .}}<span class="name">{{if .Title}}{{.Title}}{{else}}{{.URL}}{{end}}</span>{{end}}
+  <form hx-post="/feeds" hx-target="#feedsbar" hx-swap="outerHTML">
+    <input type="url" name="url" placeholder="https://example.com/feed.rss" required>
+    <button type="submit">フィード追加</button>
+  </form>
+</div>
+{{end}}
