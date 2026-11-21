@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS feeds (
+  id INTEGER PRIMARY KEY,
+  url TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL DEFAULT '',
+  etag TEXT NOT NULL DEFAULT '',
+  last_modified TEXT NOT NULL DEFAULT '',
+  last_fetched_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS entries (
+  id INTEGER PRIMARY KEY,
+  feed_id INTEGER NOT NULL REFERENCES feeds(id),
+  guid TEXT NOT NULL,
+  url TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  published_at TIMESTAMP,
+  fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  read INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(feed_id, guid)
+);
+
+CREATE INDEX IF NOT EXISTS idx_entries_published ON entries(published_at DESC, id DESC);
