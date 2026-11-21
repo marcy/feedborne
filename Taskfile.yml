@@ -12,9 +12,10 @@ tasks:
       - task --list
 
   generate:
-    desc: Regenerate the DB layer with sqlc
+    desc: Regenerate the DB layer (sqlc) and the views (templ)
     cmds:
       - sqlc generate
+      - templ generate
 
   build:
     desc: Build the binary
@@ -23,8 +24,8 @@ tasks:
       - go build -o {{.BIN}} .
     sources:
       - ./*.go
+      - ./*.templ
       - ./internal/db/*.go
-      - ./templates/*.html
       - ./db/*.sql
       - ./static/*
     generates:
@@ -47,6 +48,12 @@ tasks:
     cmds:
       - task: crawl
       - task: serve
+
+  test:
+    desc: Run the tests
+    deps: [generate]
+    cmds:
+      - go test ./...
 
   clean:
     desc: Remove the binary and the database

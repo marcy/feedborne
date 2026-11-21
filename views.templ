@@ -1,0 +1,75 @@
+package main
+
+import "strconv"
+
+templ IndexPage(data pageData) {
+	<!DOCTYPE html>
+	<html lang="ja">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>feedborne</title>
+			<link rel="stylesheet" href="/static/style.css"/>
+			<script src="/static/htmx.min.js"></script>
+		</head>
+		<body>
+			<header>
+				<h1>FEEDBORNE</h1>
+				<span class="unread" id="unread">未読 { strconv.Itoa(data.Unread) } 件</span>
+				<span class="keys"><kbd>j</kbd> 次へ <kbd>k</kbd> 前へ <kbd>o</kbd> 別タブで開く</span>
+			</header>
+			@FeedsBar(data.Feeds)
+			<main id="list">
+				if len(data.Entries) == 0 {
+					<div class="empty">まだ記事がありません。フィードを追加して <code>feedborne crawl</code> を実行してください。</div>
+				}
+				for _, e := range data.Entries {
+					@EntryItem(e)
+				}
+				@MoreButton(data.HasMore, data.NextOffset)
+			</main>
+			<script src="/static/app.js"></script>
+		</body>
+	</html>
+}
+
+templ EntryItem(e Entry) {
+	<article class={ "entry", templ.KV("read", e.Read) } data-id={ strconv.FormatInt(e.ID, 10) } data-url={ e.URL }>
+		<div class="meta"><span>{ e.FeedTitle }</span><span>{ formatTime(e.PublishedAt) }</span></div>
+		<h2><a href={ templ.URL(e.URL) } target="_blank" rel="noopener">{ e.Title }</a></h2>
+		if e.Description != "" {
+			<p>{ shortText(e.Description, 140) }</p>
+		}
+	</article>
+}
+
+templ MoreButton(hasMore bool, nextOffset int) {
+	if hasMore {
+		<div class="more"><button type="button" hx-get={ "/entries?offset=" + strconv.Itoa(nextOffset) } hx-target="closest div" hx-swap="outerHTML">もっと読む</button></div>
+	}
+}
+
+templ EntriesFrag(frag fragData) {
+	for _, e := range frag.Entries {
+		@EntryItem(e)
+	}
+	@MoreButton(frag.HasMore, frag.NextOffset)
+}
+
+templ FeedsBar(feeds []Feed) {
+	<div class="feeds" id="feedsbar">
+		for _, f := range feeds {
+			<span class="name">
+				if f.Title != "" {
+					{ f.Title }
+				} else {
+					{ f.URL }
+				}
+			</span>
+		}
+		<form hx-post="/feeds" hx-target="#feedsbar" hx-swap="outerHTML">
+			<input type="url" name="url" placeholder="https://example.com/feed.rss" required="required"/>
+			<button type="submit">フィード追加</button>
+		</form>
+	</div>
+}

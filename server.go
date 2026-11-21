@@ -4,16 +4,12 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
-
-//go:embed templates
-var templatesFS embed.FS
 
 //go:embed static
 var staticFS embed.FS
@@ -34,31 +30,22 @@ type fragData struct {
 	NextOffset int
 }
 
-func runServe(dbPath, addr string) error {
-	db, err := openDB(dbPath)
-	if err != nil {
-		return err
+func formatTime(t sql.NullTime) string {
+	if !t.Valid {
+		return ""
 	}
-	defer db.Close()
-	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"fmtTime": func(t sql.NullTime) string {
-			if !t.Valid {
-				return ""
-			}
-			return t.Time.Local().Format("01/02 15:04")
-		},
-		"short": func(s string, n int) string {
-			r := []rune(s)
-			if len(r) <= n {
-				return s
-			}
-			return string(r[:n]) + "…"
-		},
-	}).ParseFS(templatesFS, "templates/*.html")
-	if err != nil {
-		return err
-	}
+	return t.Time.Local().Format("01/02 15:04")
+}
 
+func shortText(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
+}
+
+func newHandler(db *sql.DB) http.Handler {
 	renderEntries := func(offset int) (fragData, error) {
 		entries, err := latestEntries(db, pageSize, offset)
 		if err != nil {
@@ -70,7 +57,6 @@ func runServe(dbPath, addr string) error {
 			NextOffset: offset + len(entries),
 		}, nil
 	}
-
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", http.FileServerFS(staticFS))
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
@@ -101,8 +87,8 @@ func runServe(dbPath, addr string) error {
 			HasMore:    frag.HasMore,
 			NextOffset: frag.NextOffset,
 		}
-		if err := tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
-			log.Printf("template: %v", err)
+		if err := IndexPage(data).Render(r.Context(), w); err != nil {
+			log.Printf("render index: %v", err)
 		}
 	})
 	mux.HandleFunc("GET /entries", func(w http.ResponseWriter, r *http.Request) {
@@ -116,8 +102,8 @@ func runServe(dbPath, addr string) error {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := tmpl.ExecuteTemplate(w, "entries", frag); err != nil {
-			log.Printf("template: %v", err)
+		if err := EntriesFrag(frag).Render(r.Context(), w); err != nil {
+			log.Printf("render entries: %v", err)
 		}
 	})
 	mux.HandleFunc("POST /read", func(w http.ResponseWriter, r *http.Request) {
@@ -156,12 +142,20 @@ func runServe(dbPath, addr string) error {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := tmpl.ExecuteTemplate(w, "feedsbar", feeds); err != nil {
-			log.Printf("template: %v", err)
+		if err := FeedsBar(feeds).Render(r.Context(), w); err != nil {
+			log.Printf("render feedsbar: %v", err)
 		}
 	})
+	return mux
+}
 
-	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+func runServe(dbPath, addr string) error {
+	db, err := openDB(dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	srv := &http.Server{Addr: addr, Handler: newHandler(db), ReadHeaderTimeout: 10 * time.Second}
 	fmt.Printf("feedborne serving at http://%s\n", addr)
 	return srv.ListenAndServe()
 }
