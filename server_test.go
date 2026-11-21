@@ -46,15 +46,46 @@ func get(t *testing.T, url string) (int, string) {
 	return resp.StatusCode, string(body)
 }
 
+func getWith(t *testing.T, url, acceptLang string, cookies ...*http.Cookie) (int, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acceptLang != "" {
+		req.Header.Set("Accept-Language", acceptLang)
+	}
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	return resp.StatusCode, string(body)
+}
+
 func TestIndexPage(t *testing.T) {
 	srv, _ := testServer(t)
-	code, body := get(t, srv.URL+"/")
+	code, body := getWith(t, srv.URL+"/", "ja-JP")
 	if code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", code)
 	}
-	for _, want := range []string{"FEEDBORNE", "Hello Entry", "/static/htmx.min.js", "/static/style.css", "/static/app.js", "未読 1 件"} {
+	for _, want := range []string{"FEEDBORNE", "Hello Entry", "/static/htmx.min.js", "/static/style.css", "/static/app.js", "未読 1 件", `lang="ja"`, "フィード追加", "次へ"} {
 		if !strings.Contains(body, want) {
-			t.Errorf("index should contain %q", want)
+			t.Errorf("ja index should contain %q", want)
+		}
+	}
+
+	_, body = getWith(t, srv.URL+"/", "en-US")
+	for _, want := range []string{"1 unread", `lang="en"`, "Add feed", "next"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("en index should contain %q", want)
 		}
 	}
 }
@@ -86,19 +117,41 @@ func TestEntriesFragment(t *testing.T) {
 	}
 }
 
-func TestReadEndpoint(t *testing.T) {
-	srv, entryID := testServer(t)
-	resp, err := http.PostForm(srv.URL+"/read", url.Values{"id": {strconv.FormatInt(entryID, 10)}})
+func postRead(t *testing.T, srvURL string, entryID int64, lang Lang) (int, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, srvURL+"/read",
+		strings.NewReader(url.Values{"id": {strconv.FormatInt(entryID, 10)}}.Encode()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if lang != "" {
+		req.AddCookie(&http.Cookie{Name: "lang", Value: string(lang)})
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /read: %v", err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	return resp.StatusCode, string(body)
+}
+
+func TestReadEndpoint(t *testing.T) {
+	srv, entryID := testServer(t)
+	code, body := postRead(t, srv.URL, entryID, LangJA)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
 	}
-	if string(body) != "未読 0 件" {
-		t.Errorf("expected unread count text, got %q", string(body))
+	if body != "未読 0 件" {
+		t.Errorf("expected ja unread count text, got %q", body)
+	}
+	code, body = postRead(t, srv.URL, entryID, LangEN)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if body != "0 unread" {
+		t.Errorf("expected en unread count text, got %q", body)
 	}
 
 	resp2, err := http.PostForm(srv.URL+"/read", url.Values{"id": {"abc"}})
@@ -131,5 +184,44 @@ func TestFeedsEndpointHX(t *testing.T) {
 	}
 	if !strings.Contains(string(body), `id="feedsbar"`) || !strings.Contains(string(body), "https://example.org/new.rss") {
 		t.Errorf("expected updated feedsbar fragment, got %q", string(body))
+	}
+}
+
+func TestLangSwitch(t *testing.T) {
+	srv, _ := testServer(t)
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.Get(srv.URL + "/lang?set=ja")
+	if err != nil {
+		t.Fatalf("GET /lang: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", resp.StatusCode)
+	}
+	var langCookie *http.Cookie
+	for _, c := range resp.Cookies() {
+		if c.Name == "lang" {
+			langCookie = c
+		}
+	}
+	if langCookie == nil || langCookie.Value != "ja" {
+		t.Fatalf("expected lang=ja cookie, got %v", resp.Cookies())
+	}
+	_, body := getWith(t, srv.URL+"/", "", langCookie)
+	if !strings.Contains(body, "未読 1 件") {
+		t.Error("index with lang cookie should be Japanese")
+	}
+
+	resp2, err := client.Get(srv.URL + "/lang?set=fr")
+	if err != nil {
+		t.Fatalf("GET /lang bad value: %v", err)
+	}
+	defer resp2.Body.Close()
+	for _, c := range resp2.Cookies() {
+		if c.Name == "lang" && c.Value != "en" {
+			t.Errorf("invalid set value should fall back to en, got %q", c.Value)
+		}
 	}
 }
