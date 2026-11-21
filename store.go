@@ -46,14 +46,8 @@ func openDB(path string) (*sql.DB, error) {
 	return database, nil
 }
 
-const defaultFeedURL = "https://b.hatena.ne.jp/hotentry/it.rss"
-
 func queries(database *sql.DB) *db.Queries {
 	return db.New(database)
-}
-
-func ensureDefaultFeed(database *sql.DB) error {
-	return addFeed(database, defaultFeedURL)
 }
 
 func listFeeds(database *sql.DB) ([]Feed, error) {

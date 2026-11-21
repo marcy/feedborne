@@ -25,9 +25,6 @@ func runCrawl(dbPath string) error {
 		return err
 	}
 	defer db.Close()
-	if err := ensureDefaultFeed(db); err != nil {
-		return err
-	}
 	feeds, err := listFeeds(db)
 	if err != nil {
 		return err

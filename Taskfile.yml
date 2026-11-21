@@ -1,0 +1,53 @@
+version: "3"
+
+vars:
+  BIN: feedborne
+  DB: feedborne.db
+  ADDR: 127.0.0.1:8080
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  generate:
+    desc: Regenerate the DB layer with sqlc
+    cmds:
+      - sqlc generate
+
+  build:
+    desc: Build the binary
+    deps: [generate]
+    cmds:
+      - go build -o {{.BIN}} .
+    sources:
+      - ./*.go
+      - ./internal/db/*.go
+      - ./templates/*.html
+      - ./db/*.sql
+    generates:
+      - ./{{.BIN}}
+
+  crawl:
+    desc: Fetch all registered feeds into SQLite
+    deps: [build]
+    cmds:
+      - ./{{.BIN}} crawl -db {{.DB}}
+
+  serve:
+    desc: Run the web UI
+    deps: [build]
+    cmds:
+      - ./{{.BIN}} serve -db {{.DB}} -addr {{.ADDR}}
+
+  dev:
+    desc: Crawl, then serve
+    cmds:
+      - task: crawl
+      - task: serve
+
+  clean:
+    desc: Remove the binary and the database
+    cmds:
+      - rm -f {{.BIN}} {{.DB}} {{.DB}}-shm {{.DB}}-wal

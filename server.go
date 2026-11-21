@@ -27,9 +27,6 @@ func runServe(dbPath, addr string) error {
 		return err
 	}
 	defer db.Close()
-	if err := ensureDefaultFeed(db); err != nil {
-		return err
-	}
 	tmpl, err := template.New("").Funcs(template.FuncMap{
 		"fmtTime": func(t sql.NullTime) string {
 			if !t.Valid {

@@ -9,22 +9,30 @@ A small RSS reader written in Go.
 
 ## Usage
 
+Common workflows are in the Taskfile:
+
+```sh
+task build   # sqlc generate + go build
+task crawl   # fetch all registered feeds
+task serve   # run the web UI (http://127.0.0.1:8080)
+task dev     # crawl, then serve
+```
+
+Or drive the binary directly:
+
 ```sh
 go build -o feedborne .
 
-# fetch all registered feeds (a default feed is registered on first run)
-./feedborne crawl
-
-# add another feed
+# register a feed (nothing is registered by default)
 ./feedborne feed add https://example.com/feed.rss
+./feedborne feed list
+
+# fetch all registered feeds
+./feedborne crawl
 
 # read
 ./feedborne serve -addr 127.0.0.1:8080
 ```
-
-The default feed is Hatena Bookmark's popular tech entries
-(`https://b.hatena.ne.jp/hotentry/it.rss`), the tech feed that posts to our
-Slack `#feed` channel.
 
 ## Layout
 
