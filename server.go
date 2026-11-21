@@ -24,6 +24,7 @@ type pageData struct {
 	NextOffset int
 	Lang       Lang
 	Msg        Messages
+	Theme      Theme
 }
 
 type fragData struct {
@@ -93,6 +94,7 @@ func newHandler(db *sql.DB) http.Handler {
 			NextOffset: frag.NextOffset,
 			Lang:       lang,
 			Msg:        messages(lang),
+			Theme:      detectTheme(r),
 		}
 		if err := IndexPage(data).Render(r.Context(), w); err != nil {
 			log.Printf("render index: %v", err)
@@ -161,6 +163,19 @@ func newHandler(db *sql.DB) http.Handler {
 		http.SetCookie(w, &http.Cookie{
 			Name:   "lang",
 			Value:  string(lang),
+			Path:   "/",
+			MaxAge: 365 * 24 * 60 * 60,
+		})
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+	mux.HandleFunc("GET /theme", func(w http.ResponseWriter, r *http.Request) {
+		theme := Theme(r.URL.Query().Get("set"))
+		if !theme.valid() {
+			theme = ThemeDark
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:   "theme",
+			Value:  string(theme),
 			Path:   "/",
 			MaxAge: 365 * 24 * 60 * 60,
 		})
