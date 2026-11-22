@@ -9,13 +9,12 @@ A small RSS reader written in Go.
 
 ## Development
 
-The Go toolchain is pinned with [mise](https://mise.jdx.dev) in `mise.toml`:
+All the toolchains are pinned with [mise](https://mise.jdx.dev) in `mise.toml` (Go, sqlc, templ and Task):
 
 ```sh
-mise install   # install the pinned Go version
+mise install   # install every pinned tool
+task build     # generate + build with the mise-managed tools
 ```
-
-sqlc, templ and Task are installed separately (see the Taskfile for how they are driven).
 
 ## Usage
 
