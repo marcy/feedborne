@@ -22,12 +22,16 @@ type pageData struct {
 	Unread     int
 	HasMore    bool
 	NextOffset int
+	Lang       Lang
+	Msg        Messages
+	Theme      Theme
 }
 
 type fragData struct {
 	Entries    []Entry
 	HasMore    bool
 	NextOffset int
+	Msg        Messages
 }
 
 func formatTime(t sql.NullTime) string {
@@ -46,7 +50,7 @@ func shortText(s string, n int) string {
 }
 
 func newHandler(db *sql.DB) http.Handler {
-	renderEntries := func(offset int) (fragData, error) {
+	renderEntries := func(offset int, msg Messages) (fragData, error) {
 		entries, err := latestEntries(db, pageSize, offset)
 		if err != nil {
 			return fragData{}, err
@@ -55,6 +59,7 @@ func newHandler(db *sql.DB) http.Handler {
 			Entries:    entries,
 			HasMore:    len(entries) == pageSize,
 			NextOffset: offset + len(entries),
+			Msg:        msg,
 		}, nil
 	}
 	mux := http.NewServeMux()
@@ -64,7 +69,8 @@ func newHandler(db *sql.DB) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		frag, err := renderEntries(0)
+		lang := detectLang(r)
+		frag, err := renderEntries(0, messages(lang))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -86,6 +92,9 @@ func newHandler(db *sql.DB) http.Handler {
 			Unread:     unread,
 			HasMore:    frag.HasMore,
 			NextOffset: frag.NextOffset,
+			Lang:       lang,
+			Msg:        messages(lang),
+			Theme:      detectTheme(r),
 		}
 		if err := IndexPage(data).Render(r.Context(), w); err != nil {
 			log.Printf("render index: %v", err)
@@ -96,7 +105,7 @@ func newHandler(db *sql.DB) http.Handler {
 		if offset < 0 {
 			offset = 0
 		}
-		frag, err := renderEntries(offset)
+		frag, err := renderEntries(offset, messages(detectLang(r)))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -122,7 +131,7 @@ func newHandler(db *sql.DB) http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(w, "未読 %d 件", unread)
+		fmt.Fprint(w, messages(detectLang(r)).UnreadText(unread))
 	})
 	mux.HandleFunc("POST /feeds", func(w http.ResponseWriter, r *http.Request) {
 		url := strings.TrimSpace(r.FormValue("url"))
@@ -142,9 +151,35 @@ func newHandler(db *sql.DB) http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := FeedsBar(feeds).Render(r.Context(), w); err != nil {
+		if err := FeedsBar(feeds, messages(detectLang(r))).Render(r.Context(), w); err != nil {
 			log.Printf("render feedsbar: %v", err)
 		}
+	})
+	mux.HandleFunc("GET /lang", func(w http.ResponseWriter, r *http.Request) {
+		lang := Lang(r.URL.Query().Get("set"))
+		if lang != LangEN && lang != LangJA {
+			lang = LangEN
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:   "lang",
+			Value:  string(lang),
+			Path:   "/",
+			MaxAge: 365 * 24 * 60 * 60,
+		})
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+	mux.HandleFunc("GET /theme", func(w http.ResponseWriter, r *http.Request) {
+		theme := Theme(r.URL.Query().Get("set"))
+		if !theme.valid() {
+			theme = ThemeDark
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:   "theme",
+			Value:  string(theme),
+			Path:   "/",
+			MaxAge: 365 * 24 * 60 * 60,
+		})
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 	return mux
 }
