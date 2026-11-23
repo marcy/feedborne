@@ -151,7 +151,7 @@ func newHandler(db *sql.DB) http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := FeedsBar(feeds, messages(detectLang(r))).Render(r.Context(), w); err != nil {
+		if err := FeedsSidebar(feeds, messages(detectLang(r))).Render(r.Context(), w); err != nil {
 			log.Printf("render feedsbar: %v", err)
 		}
 	})

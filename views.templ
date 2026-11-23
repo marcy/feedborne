@@ -14,32 +14,34 @@ templ IndexPage(data pageData) {
 		</head>
 		<body>
 			<header>
-				<h1>FEEDBORNE</h1>
+				<span class="brand">feedborne</span>
 				<span class="unread" id="unread">{ data.Msg.UnreadText(data.Unread) }</span>
-				<span class="keys"><kbd>j</kbd> { data.Msg.KeyNext } <kbd>k</kbd> { data.Msg.KeyPrev } <kbd>o</kbd> { data.Msg.KeyOpen }</span>
-				<span class="lang">
-					<a href="/lang?set=en" class={ templ.KV("current", data.Lang == LangEN) }>EN</a>
-					|
-					<a href="/lang?set=ja" class={ templ.KV("current", data.Lang == LangJA) }>日本語</a>
-				</span>
-				<span class="theme">
-					<a href="/theme?set=dark" class={ templ.KV("current", data.Theme == ThemeDark) }>Dark</a>
-					|
-					<a href="/theme?set=light" class={ templ.KV("current", data.Theme == ThemeLight) }>Light</a>
-					|
-					<a href="/theme?set=sepia" class={ templ.KV("current", data.Theme == ThemeSepia) }>Sepia</a>
+				<span class="controls">
+					<span class="seg">
+						<a href="/lang?set=en" class={ templ.KV("current", data.Lang == LangEN) }>EN</a>
+						<a href="/lang?set=ja" class={ templ.KV("current", data.Lang == LangJA) }>日本語</a>
+					</span>
+					<span class="seg">
+						<a href="/theme?set=dark" class={ templ.KV("current", data.Theme == ThemeDark) }>Dark</a>
+						<a href="/theme?set=light" class={ templ.KV("current", data.Theme == ThemeLight) }>Light</a>
+						<a href="/theme?set=sepia" class={ templ.KV("current", data.Theme == ThemeSepia) }>Sepia</a>
+					</span>
 				</span>
 			</header>
-			@FeedsBar(data.Feeds, data.Msg)
-			<main id="list">
-				if len(data.Entries) == 0 {
-					<div class="empty">{ data.Msg.EmptyLead }<code>feedborne crawl</code>{ data.Msg.EmptyTail }</div>
-				}
-				for _, e := range data.Entries {
-					@EntryItem(e)
-				}
-				@MoreButton(data.HasMore, data.NextOffset, data.Msg)
-			</main>
+			<div class="layout">
+				@FeedsSidebar(data.Feeds, data.Msg)
+				<main id="list">
+					<div class="col">
+						if len(data.Entries) == 0 {
+							<div class="empty">{ data.Msg.EmptyLead }<code>feedborne crawl</code>{ data.Msg.EmptyTail }</div>
+						}
+						for _, e := range data.Entries {
+							@EntryItem(e)
+						}
+						@MoreButton(data.HasMore, data.NextOffset, data.Msg)
+					</div>
+				</main>
+			</div>
 			<script src="/static/app.js"></script>
 		</body>
 	</html>
@@ -47,11 +49,14 @@ templ IndexPage(data pageData) {
 
 templ EntryItem(e Entry) {
 	<article class={ "entry", templ.KV("read", e.Read) } data-id={ strconv.FormatInt(e.ID, 10) } data-url={ e.URL }>
-		<div class="meta"><span>{ e.FeedTitle }</span><span>{ formatTime(e.PublishedAt) }</span></div>
-		<h2><a href={ templ.URL(e.URL) } target="_blank" rel="noopener">{ e.Title }</a></h2>
-		if e.Description != "" {
-			<p>{ shortText(e.Description, 140) }</p>
-		}
+		<span class="dot"></span>
+		<div class="entry-body">
+			<div class="meta"><span class="feed">{ e.FeedTitle }</span><span class="time">{ formatTime(e.PublishedAt) }</span></div>
+			<h2><a href={ templ.URL(e.URL) } target="_blank" rel="noopener">{ e.Title }</a></h2>
+			if e.Description != "" {
+				<p>{ shortText(e.Description, 140) }</p>
+			}
+		</div>
 	</article>
 }
 
@@ -68,20 +73,26 @@ templ EntriesFrag(frag fragData) {
 	@MoreButton(frag.HasMore, frag.NextOffset, frag.Msg)
 }
 
-templ FeedsBar(feeds []Feed, msg Messages) {
-	<div class="feeds" id="feedsbar">
-		for _, f := range feeds {
-			<span class="name">
-				if f.Title != "" {
-					{ f.Title }
-				} else {
-					{ f.URL }
-				}
-			</span>
-		}
-		<form hx-post="/feeds" hx-target="#feedsbar" hx-swap="outerHTML">
-			<input type="url" name="url" placeholder="https://example.com/feed.rss" required="required"/>
-			<button type="submit">{ msg.AddFeed }</button>
-		</form>
-	</div>
+templ FeedsSidebar(feeds []Feed, msg Messages) {
+	<aside class="sidebar" id="feedsbar">
+		<div class="side-head">{ msg.FeedsLabel }</div>
+		<nav class="feed-list">
+			for _, f := range feeds {
+				<div class="feed-row">
+					if f.Title != "" {
+						{ f.Title }
+					} else {
+						{ f.URL }
+					}
+				</div>
+			}
+		</nav>
+		<div class="side-foot">
+			<form hx-post="/feeds" hx-target="#feedsbar" hx-swap="outerHTML">
+				<input type="url" name="url" placeholder="https://example.com/feed.rss" required="required"/>
+				<button type="submit">{ msg.AddFeed }</button>
+			</form>
+			<p class="keys"><kbd>j</kbd> { msg.KeyNext } <kbd>k</kbd> { msg.KeyPrev } <kbd>o</kbd> { msg.KeyOpen }</p>
+		</div>
+	</aside>
 }
