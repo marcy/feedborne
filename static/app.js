@@ -43,6 +43,15 @@
         target: '#unread',
         swap: 'innerHTML'
       });
+    } else if (e.key === 's' || e.key === 'b') {
+      var el2 = entries[idx];
+      if (!el2) return;
+      var btn = el2.querySelector(e.key === 's' ? '.save-btn' : '.bm-btn');
+      if (!btn) return;
+      htmx.ajax('POST', btn.getAttribute('hx-post'), {
+        target: btn,
+        swap: 'outerHTML'
+      });
     }
   });
 })();

@@ -10,6 +10,47 @@ import (
 	"database/sql"
 )
 
+const entryByID = `-- name: EntryByID :one
+SELECT e.id, e.feed_id, f.title AS feed_title, e.guid, e.url, e.title,
+       e.description, e.published_at, e.read, e.bookmarked, e.saved
+FROM entries e
+JOIN feeds f ON f.id = e.feed_id
+WHERE e.id = ?
+`
+
+type EntryByIDRow struct {
+	ID          int64
+	FeedID      int64
+	FeedTitle   string
+	Guid        string
+	Url         string
+	Title       string
+	Description string
+	PublishedAt sql.NullTime
+	Read        int64
+	Bookmarked  int64
+	Saved       int64
+}
+
+func (q *Queries) EntryByID(ctx context.Context, id int64) (EntryByIDRow, error) {
+	row := q.db.QueryRowContext(ctx, entryByID, id)
+	var i EntryByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.FeedID,
+		&i.FeedTitle,
+		&i.Guid,
+		&i.Url,
+		&i.Title,
+		&i.Description,
+		&i.PublishedAt,
+		&i.Read,
+		&i.Bookmarked,
+		&i.Saved,
+	)
+	return i, err
+}
+
 const insertEntry = `-- name: InsertEntry :execrows
 INSERT OR IGNORE INTO entries (feed_id, guid, url, title, description, published_at)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -50,7 +91,7 @@ func (q *Queries) InsertFeed(ctx context.Context, url string) error {
 
 const latestEntries = `-- name: LatestEntries :many
 SELECT e.id, e.feed_id, f.title AS feed_title, e.guid, e.url, e.title,
-       e.description, e.published_at, e.read
+       e.description, e.published_at, e.read, e.bookmarked, e.saved
 FROM entries e
 JOIN feeds f ON f.id = e.feed_id
 ORDER BY COALESCE(e.published_at, e.fetched_at) DESC, e.id DESC
@@ -72,6 +113,8 @@ type LatestEntriesRow struct {
 	Description string
 	PublishedAt sql.NullTime
 	Read        int64
+	Bookmarked  int64
+	Saved       int64
 }
 
 func (q *Queries) LatestEntries(ctx context.Context, arg LatestEntriesParams) ([]LatestEntriesRow, error) {
@@ -93,6 +136,8 @@ func (q *Queries) LatestEntries(ctx context.Context, arg LatestEntriesParams) ([
 			&i.Description,
 			&i.PublishedAt,
 			&i.Read,
+			&i.Bookmarked,
+			&i.Saved,
 		); err != nil {
 			return nil, err
 		}
@@ -149,6 +194,109 @@ UPDATE entries SET read = 1 WHERE id = ?
 
 func (q *Queries) MarkRead(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, markRead, id)
+	return err
+}
+
+const savedCount = `-- name: SavedCount :one
+SELECT COUNT(*) FROM entries WHERE saved = 1
+`
+
+func (q *Queries) SavedCount(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, savedCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const savedEntries = `-- name: SavedEntries :many
+SELECT e.id, e.feed_id, f.title AS feed_title, e.guid, e.url, e.title,
+       e.description, e.published_at, e.read, e.bookmarked, e.saved
+FROM entries e
+JOIN feeds f ON f.id = e.feed_id
+WHERE e.saved = 1
+ORDER BY COALESCE(e.published_at, e.fetched_at) DESC, e.id DESC
+LIMIT ? OFFSET ?
+`
+
+type SavedEntriesParams struct {
+	Limit  int64
+	Offset int64
+}
+
+type SavedEntriesRow struct {
+	ID          int64
+	FeedID      int64
+	FeedTitle   string
+	Guid        string
+	Url         string
+	Title       string
+	Description string
+	PublishedAt sql.NullTime
+	Read        int64
+	Bookmarked  int64
+	Saved       int64
+}
+
+func (q *Queries) SavedEntries(ctx context.Context, arg SavedEntriesParams) ([]SavedEntriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, savedEntries, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SavedEntriesRow
+	for rows.Next() {
+		var i SavedEntriesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FeedID,
+			&i.FeedTitle,
+			&i.Guid,
+			&i.Url,
+			&i.Title,
+			&i.Description,
+			&i.PublishedAt,
+			&i.Read,
+			&i.Bookmarked,
+			&i.Saved,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setBookmarked = `-- name: SetBookmarked :exec
+UPDATE entries SET bookmarked = ? WHERE id = ?
+`
+
+type SetBookmarkedParams struct {
+	Bookmarked int64
+	ID         int64
+}
+
+func (q *Queries) SetBookmarked(ctx context.Context, arg SetBookmarkedParams) error {
+	_, err := q.db.ExecContext(ctx, setBookmarked, arg.Bookmarked, arg.ID)
+	return err
+}
+
+const setSaved = `-- name: SetSaved :exec
+UPDATE entries SET saved = ? WHERE id = ?
+`
+
+type SetSavedParams struct {
+	Saved int64
+	ID    int64
+}
+
+func (q *Queries) SetSaved(ctx context.Context, arg SetSavedParams) error {
+	_, err := q.db.ExecContext(ctx, setSaved, arg.Saved, arg.ID)
 	return err
 }
 

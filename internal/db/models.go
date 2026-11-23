@@ -19,6 +19,8 @@ type Entry struct {
 	PublishedAt sql.NullTime
 	FetchedAt   time.Time
 	Read        int64
+	Bookmarked  int64
+	Saved       int64
 }
 
 type Feed struct {

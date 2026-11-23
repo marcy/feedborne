@@ -187,6 +187,114 @@ func TestFeedsEndpointHX(t *testing.T) {
 	}
 }
 
+func postForm(t *testing.T, target string) (int, string) {
+	t.Helper()
+	resp, err := http.PostForm(target, url.Values{})
+	if err != nil {
+		t.Fatalf("POST %s: %v", target, err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(body)
+}
+
+func TestSaveEndpointAndSavedFilter(t *testing.T) {
+	srv, entryID := testServer(t)
+	id := strconv.FormatInt(entryID, 10)
+
+	code, body := postForm(t, srv.URL+"/save?id="+id)
+	if code != http.StatusOK {
+		t.Fatalf("POST /save: expected 200, got %d", code)
+	}
+	if !strings.Contains(body, "save-btn") || !strings.Contains(body, "on") {
+		t.Errorf("save button should be on after save, got %q", body)
+	}
+
+	_, body = getWith(t, srv.URL+"/?filter=saved", "en-US")
+	if !strings.Contains(body, "Hello Entry") {
+		t.Error("saved view should list the saved entry")
+	}
+
+	code, body = postForm(t, srv.URL+"/save?id="+id)
+	if code != http.StatusOK {
+		t.Fatalf("POST /save toggle off: expected 200, got %d", code)
+	}
+	_, body = getWith(t, srv.URL+"/?filter=saved", "ja-JP")
+	if strings.Contains(body, "Hello Entry") {
+		t.Error("saved view should be empty after unsave")
+	}
+	if !strings.Contains(body, "まだ保存した記事がありません") {
+		t.Error("saved view should show the saved empty-state text")
+	}
+
+	if code, _ := postForm(t, srv.URL+"/save?id=abc"); code != http.StatusBadRequest {
+		t.Errorf("POST /save bad id: expected 400, got %d", code)
+	}
+}
+
+func TestBookmarkEndpoint(t *testing.T) {
+	var calls int
+	var lastBody string
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		b, _ := io.ReadAll(r.Body)
+		lastBody = string(b)
+		if r.URL.Path != "/v1/pages" {
+			t.Errorf("notion path: %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
+			t.Errorf("notion auth header: %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"object":"page","id":"abc"}`))
+	}))
+	t.Cleanup(fake.Close)
+	t.Setenv("FEEDBORNE_NOTION_TOKEN", "test-token")
+	t.Setenv("FEEDBORNE_NOTION_DATA_SOURCE_ID", "ds-123")
+	t.Setenv("FEEDBORNE_NOTION_API_BASE", fake.URL)
+
+	srv, entryID := testServer(t)
+	id := strconv.FormatInt(entryID, 10)
+
+	_, body := get(t, srv.URL+"/")
+	if !strings.Contains(body, "bm-btn") {
+		t.Error("index should show the Notion bookmark button when configured")
+	}
+
+	code, body := postForm(t, srv.URL+"/bookmark?id="+id)
+	if code != http.StatusOK {
+		t.Fatalf("POST /bookmark: expected 200, got %d (%s)", code, body)
+	}
+	if calls != 1 {
+		t.Fatalf("expected 1 notion call, got %d", calls)
+	}
+	for _, want := range []string{"ds-123", "Hello Entry", "https://example.com/1", "userDefined:URL"} {
+		if !strings.Contains(lastBody, want) {
+			t.Errorf("notion payload should contain %q, got %s", want, lastBody)
+		}
+	}
+	if !strings.Contains(body, "on") {
+		t.Errorf("bookmark button should be on after bookmarking, got %q", body)
+	}
+
+	// Second bookmark is idempotent: no extra API call.
+	if _, _ = postForm(t, srv.URL+"/bookmark?id="+id); calls != 1 {
+		t.Errorf("second bookmark should not call notion again, calls=%d", calls)
+	}
+}
+
+func TestBookmarkNotConfigured(t *testing.T) {
+	srv, entryID := testServer(t)
+	_, body := get(t, srv.URL+"/")
+	if strings.Contains(body, "bm-btn") {
+		t.Error("index should hide the Notion bookmark button when not configured")
+	}
+	code, _ := postForm(t, srv.URL+"/bookmark?id="+strconv.FormatInt(entryID, 10))
+	if code != http.StatusBadRequest {
+		t.Errorf("POST /bookmark unconfigured: expected 400, got %d", code)
+	}
+}
+
 func TestLangSwitch(t *testing.T) {
 	srv, _ := testServer(t)
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {

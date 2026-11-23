@@ -33,6 +33,8 @@ type Entry struct {
 	Description string
 	PublishedAt sql.NullTime
 	Read        bool
+	Bookmarked  bool
+	Saved       bool
 }
 
 func openDB(path string) (*sql.DB, error) {
@@ -43,7 +45,43 @@ func openDB(path string) (*sql.DB, error) {
 	if _, err := database.Exec(schemaSQL); err != nil {
 		return nil, err
 	}
+	if err := migrate(database); err != nil {
+		return nil, err
+	}
 	return database, nil
+}
+
+// migrate adds columns introduced after the first release. CREATE TABLE
+// IF NOT EXISTS in the schema does not alter tables that already exist,
+// so databases created by older builds are upgraded here.
+func migrate(database *sql.DB) error {
+	rows, err := database.Query("PRAGMA table_info(entries)")
+	if err != nil {
+		return err
+	}
+	cols := map[string]bool{}
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, typ string
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			rows.Close()
+			return err
+		}
+		cols[name] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, col := range []string{"bookmarked", "saved"} {
+		if !cols[col] {
+			if _, err := database.Exec("ALTER TABLE entries ADD COLUMN " + col + " INTEGER NOT NULL DEFAULT 0"); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func queries(database *sql.DB) *db.Queries {
@@ -118,16 +156,92 @@ func latestEntries(database *sql.DB, limit, offset int) ([]Entry, error) {
 			Description: r.Description,
 			PublishedAt: r.PublishedAt,
 			Read:        r.Read != 0,
+			Bookmarked:  r.Bookmarked != 0,
+			Saved:       r.Saved != 0,
 		})
 	}
 	return entries, nil
+}
+
+func savedEntries(database *sql.DB, limit, offset int) ([]Entry, error) {
+	rows, err := queries(database).SavedEntries(context.Background(), db.SavedEntriesParams{
+		Limit:  int64(limit),
+		Offset: int64(offset),
+	})
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]Entry, 0, len(rows))
+	for _, r := range rows {
+		entries = append(entries, Entry{
+			ID:          r.ID,
+			FeedID:      r.FeedID,
+			FeedTitle:   r.FeedTitle,
+			GUID:        r.Guid,
+			URL:         r.Url,
+			Title:       r.Title,
+			Description: r.Description,
+			PublishedAt: r.PublishedAt,
+			Read:        r.Read != 0,
+			Bookmarked:  r.Bookmarked != 0,
+			Saved:       r.Saved != 0,
+		})
+	}
+	return entries, nil
+}
+
+func getEntry(database *sql.DB, id int64) (Entry, error) {
+	r, err := queries(database).EntryByID(context.Background(), id)
+	if err != nil {
+		return Entry{}, err
+	}
+	return Entry{
+		ID:          r.ID,
+		FeedID:      r.FeedID,
+		FeedTitle:   r.FeedTitle,
+		GUID:        r.Guid,
+		URL:         r.Url,
+		Title:       r.Title,
+		Description: r.Description,
+		PublishedAt: r.PublishedAt,
+		Read:        r.Read != 0,
+		Bookmarked:  r.Bookmarked != 0,
+		Saved:       r.Saved != 0,
+	}, nil
 }
 
 func markRead(database *sql.DB, id int64) error {
 	return queries(database).MarkRead(context.Background(), id)
 }
 
+func setBookmarked(database *sql.DB, id int64, on bool) error {
+	v := int64(0)
+	if on {
+		v = 1
+	}
+	return queries(database).SetBookmarked(context.Background(), db.SetBookmarkedParams{
+		Bookmarked: v,
+		ID:         id,
+	})
+}
+
+func setSaved(database *sql.DB, id int64, on bool) error {
+	v := int64(0)
+	if on {
+		v = 1
+	}
+	return queries(database).SetSaved(context.Background(), db.SetSavedParams{
+		Saved: v,
+		ID:    id,
+	})
+}
+
 func unreadCount(database *sql.DB) (int, error) {
 	n, err := queries(database).UnreadCount(context.Background())
+	return int(n), err
+}
+
+func savedCount(database *sql.DB) (int, error) {
+	n, err := queries(database).SavedCount(context.Background())
 	return int(n), err
 }

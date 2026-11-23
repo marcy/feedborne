@@ -17,14 +17,39 @@ VALUES (?, ?, ?, ?, ?, ?);
 
 -- name: LatestEntries :many
 SELECT e.id, e.feed_id, f.title AS feed_title, e.guid, e.url, e.title,
-       e.description, e.published_at, e.read
+       e.description, e.published_at, e.read, e.bookmarked, e.saved
 FROM entries e
 JOIN feeds f ON f.id = e.feed_id
 ORDER BY COALESCE(e.published_at, e.fetched_at) DESC, e.id DESC
 LIMIT ? OFFSET ?;
 
+-- name: SavedEntries :many
+SELECT e.id, e.feed_id, f.title AS feed_title, e.guid, e.url, e.title,
+       e.description, e.published_at, e.read, e.bookmarked, e.saved
+FROM entries e
+JOIN feeds f ON f.id = e.feed_id
+WHERE e.saved = 1
+ORDER BY COALESCE(e.published_at, e.fetched_at) DESC, e.id DESC
+LIMIT ? OFFSET ?;
+
+-- name: EntryByID :one
+SELECT e.id, e.feed_id, f.title AS feed_title, e.guid, e.url, e.title,
+       e.description, e.published_at, e.read, e.bookmarked, e.saved
+FROM entries e
+JOIN feeds f ON f.id = e.feed_id
+WHERE e.id = ?;
+
 -- name: MarkRead :exec
 UPDATE entries SET read = 1 WHERE id = ?;
 
+-- name: SetBookmarked :exec
+UPDATE entries SET bookmarked = ? WHERE id = ?;
+
+-- name: SetSaved :exec
+UPDATE entries SET saved = ? WHERE id = ?;
+
 -- name: UnreadCount :one
 SELECT COUNT(*) FROM entries WHERE read = 0;
+
+-- name: SavedCount :one
+SELECT COUNT(*) FROM entries WHERE saved = 1;

@@ -25,6 +25,9 @@ type pageData struct {
 	Lang       Lang
 	Msg        Messages
 	Theme      Theme
+	Filter     string
+	SavedCount int
+	Notion     bool
 }
 
 type fragData struct {
@@ -32,6 +35,26 @@ type fragData struct {
 	HasMore    bool
 	NextOffset int
 	Msg        Messages
+	Filter     string
+	Notion     bool
+}
+
+// entriesURL builds the load-more fragment URL, preserving the filter.
+func entriesURL(offset int, filter string) string {
+	u := "/entries?offset=" + strconv.Itoa(offset)
+	if filter == "saved" {
+		u += "&filter=saved"
+	}
+	return u
+}
+
+// bookmarkTitle is the bookmark button tooltip: the action label, or the
+// error text when the last Notion request failed.
+func bookmarkTitle(msg Messages, errText string) string {
+	if errText != "" {
+		return errText
+	}
+	return msg.SaveToNotion + " (b)"
 }
 
 func formatTime(t sql.NullTime) string {
@@ -50,8 +73,15 @@ func shortText(s string, n int) string {
 }
 
 func newHandler(db *sql.DB) http.Handler {
-	renderEntries := func(offset int, msg Messages) (fragData, error) {
-		entries, err := latestEntries(db, pageSize, offset)
+	notionCfg, notionOK := notionFromEnv()
+	renderEntries := func(offset int, msg Messages, filter string) (fragData, error) {
+		var entries []Entry
+		var err error
+		if filter == "saved" {
+			entries, err = savedEntries(db, pageSize, offset)
+		} else {
+			entries, err = latestEntries(db, pageSize, offset)
+		}
 		if err != nil {
 			return fragData{}, err
 		}
@@ -60,6 +90,8 @@ func newHandler(db *sql.DB) http.Handler {
 			HasMore:    len(entries) == pageSize,
 			NextOffset: offset + len(entries),
 			Msg:        msg,
+			Filter:     filter,
+			Notion:     notionOK,
 		}, nil
 	}
 	mux := http.NewServeMux()
@@ -70,7 +102,11 @@ func newHandler(db *sql.DB) http.Handler {
 			return
 		}
 		lang := detectLang(r)
-		frag, err := renderEntries(0, messages(lang))
+		filter := r.URL.Query().Get("filter")
+		if filter != "saved" {
+			filter = "all"
+		}
+		frag, err := renderEntries(0, messages(lang), filter)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -85,6 +121,11 @@ func newHandler(db *sql.DB) http.Handler {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		saved, err := savedCount(db)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		data := pageData{
 			Entries:    frag.Entries,
@@ -95,6 +136,9 @@ func newHandler(db *sql.DB) http.Handler {
 			Lang:       lang,
 			Msg:        messages(lang),
 			Theme:      detectTheme(r),
+			Filter:     filter,
+			SavedCount: saved,
+			Notion:     notionOK,
 		}
 		if err := IndexPage(data).Render(r.Context(), w); err != nil {
 			log.Printf("render index: %v", err)
@@ -105,7 +149,11 @@ func newHandler(db *sql.DB) http.Handler {
 		if offset < 0 {
 			offset = 0
 		}
-		frag, err := renderEntries(offset, messages(detectLang(r)))
+		filter := r.URL.Query().Get("filter")
+		if filter != "saved" {
+			filter = "all"
+		}
+		frag, err := renderEntries(offset, messages(detectLang(r)), filter)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -133,6 +181,66 @@ func newHandler(db *sql.DB) http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, messages(detectLang(r)).UnreadText(unread))
 	})
+	mux.HandleFunc("POST /save", func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.ParseInt(r.FormValue("id"), 10, 64)
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		entry, err := getEntry(db, id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := setSaved(db, id, !entry.Saved); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		entry.Saved = !entry.Saved
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := SaveButton(entry, messages(detectLang(r))).Render(r.Context(), w); err != nil {
+			log.Printf("render save button: %v", err)
+		}
+	})
+	mux.HandleFunc("POST /bookmark", func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.ParseInt(r.FormValue("id"), 10, 64)
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		if !notionOK {
+			http.Error(w, "notion bookmark is not configured", http.StatusBadRequest)
+			return
+		}
+		entry, err := getEntry(db, id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		msg := messages(detectLang(r))
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if entry.Bookmarked {
+			if err := BookmarkButton(entry, msg, "").Render(r.Context(), w); err != nil {
+				log.Printf("render bookmark button: %v", err)
+			}
+			return
+		}
+		if err := notionCfg.createBookmarkPage(r.Context(), entry.Title, entry.URL); err != nil {
+			log.Printf("bookmark entry %d: %v", id, err)
+			if rerr := BookmarkButton(entry, msg, err.Error()).Render(r.Context(), w); rerr != nil {
+				log.Printf("render bookmark button: %v", rerr)
+			}
+			return
+		}
+		if err := setBookmarked(db, id, true); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		entry.Bookmarked = true
+		if err := BookmarkButton(entry, msg, "").Render(r.Context(), w); err != nil {
+			log.Printf("render bookmark button: %v", err)
+		}
+	})
 	mux.HandleFunc("POST /feeds", func(w http.ResponseWriter, r *http.Request) {
 		url := strings.TrimSpace(r.FormValue("url"))
 		if url != "" {
@@ -150,8 +258,17 @@ func newHandler(db *sql.DB) http.Handler {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		saved, err := savedCount(db)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		filter := r.FormValue("filter")
+		if filter != "saved" {
+			filter = "all"
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := FeedsSidebar(feeds, messages(detectLang(r))).Render(r.Context(), w); err != nil {
+		if err := FeedsSidebar(feeds, messages(detectLang(r)), filter, saved, notionOK).Render(r.Context(), w); err != nil {
 			log.Printf("render feedsbar: %v", err)
 		}
 	})

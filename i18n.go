@@ -25,6 +25,12 @@ type Messages struct {
 	LoadMore     string
 	AddFeed      string
 	FeedsLabel   string
+	AllLabel     string
+	ReadLater    string
+	SaveToNotion string
+	KeySave      string
+	KeyBookmark  string
+	EmptySaved   string
 }
 
 // UnreadText formats the unread counter, e.g. "未読 3 件" / "3 unread".
@@ -43,6 +49,12 @@ var catalog = map[Lang]Messages{
 		LoadMore:     "Load more",
 		AddFeed:      "Add feed",
 		FeedsLabel:   "Feeds",
+		AllLabel:     "All entries",
+		ReadLater:    "Read later",
+		SaveToNotion: "Save to Notion",
+		KeySave:      "read later",
+		KeyBookmark:  "bookmark to Notion",
+		EmptySaved:   "Nothing saved yet. Select an entry and press s to save it for later.",
 	},
 	LangJA: {
 		UnreadFormat: "未読 %d 件",
@@ -54,6 +66,12 @@ var catalog = map[Lang]Messages{
 		LoadMore:     "もっと読む",
 		AddFeed:      "フィード追加",
 		FeedsLabel:   "フィード",
+		AllLabel:     "すべての記事",
+		ReadLater:    "あとで読む",
+		SaveToNotion: "Notionに保存",
+		KeySave:      "あとで読む",
+		KeyBookmark:  "Notionに保存",
+		EmptySaved:   "まだ保存した記事がありません。記事を選んで s キーで保存できます。",
 	},
 }
 
