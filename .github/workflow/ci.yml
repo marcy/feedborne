@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+        # Installs every tool pinned in mise.toml (Go, sqlc, templ, Task).
+
+      - name: Check generated files are up to date
+        run: |
+          sqlc generate
+          templ generate
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go build -o feedborne .
