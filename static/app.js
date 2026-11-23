@@ -9,15 +9,28 @@
     }
     if (idx >= entries.length) idx = Math.max(0, entries.length - 1);
   }
+  function markRead(el) {
+    if (!el || el.classList.contains('read')) return;
+    el.classList.add('read');
+    htmx.ajax('POST', '/read', {
+      values: { id: el.getAttribute('data-id') },
+      target: '#unread',
+      swap: 'innerHTML'
+    });
+  }
   function select(i) {
     if (!entries.length) return;
     entries[idx].classList.remove('selected');
     idx = Math.max(0, Math.min(entries.length - 1, i));
     entries[idx].classList.add('selected');
     entries[idx].scrollIntoView({ block: 'nearest' });
+    markRead(entries[idx]);
   }
   collect();
-  if (entries.length) entries[0].classList.add('selected');
+  if (entries.length) {
+    entries[0].classList.add('selected');
+    markRead(entries[0]);
+  }
   document.body.addEventListener('htmx:afterSwap', function () {
     var had = entries[idx];
     collect();
@@ -40,12 +53,7 @@
       var el = entries[idx];
       if (!el) return;
       window.open(el.getAttribute('data-url'), '_blank', 'noopener');
-      el.classList.add('read');
-      htmx.ajax('POST', '/read', {
-        values: { id: el.getAttribute('data-id') },
-        target: '#unread',
-        swap: 'innerHTML'
-      });
+      markRead(el);
     } else if (e.key === 's' || e.key === 'b') {
       var el2 = entries[idx];
       if (!el2) return;

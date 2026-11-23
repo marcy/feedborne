@@ -7,7 +7,7 @@ A small RSS reader written in Go.
 - Single binary with subcommands: `crawl` fetches feeds, `serve` runs the web UI
 - Storage: SQLite (pure-Go driver, no cgo)
 - Frontend: server-rendered HTML with templ (type-safe, compiled to Go) + htmx (vendored, no CDN) for partial updates and a pinch of vanilla JS for the keyboard UI.
-- Keyboard-driven reading: `j` / `k` move the selection, `o` opens the entry in a new tab (and marks it read), `s` saves it for later, `l` switches between all entries and the read-later view, `b` bookmarks it to Notion (when configured)
+- Keyboard-driven reading: `j` / `k` move the selection, `o` opens the entry in a new tab, `s` saves it for later, `l` switches between all entries and the read-later view, `b` bookmarks it to Notion (when configured). An entry is marked read as soon as it receives the selection
 
 ## Development
 
