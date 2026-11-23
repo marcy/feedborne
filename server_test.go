@@ -76,7 +76,7 @@ func TestIndexPage(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", code)
 	}
-	for _, want := range []string{"FEEDBORNE", "Hello Entry", "/static/htmx.min.js", "/static/style.css", "/static/app.js", "未読 1 件", `lang="ja"`, `data-theme="dark"`, "フィード追加", "次へ"} {
+	for _, want := range []string{"feedborne", "Hello Entry", "/static/htmx.min.js", "/static/style.css", "/static/app.js", "未読 1 件", `lang="ja"`, `data-theme="dark"`, "フィード追加", "次へ", "フィード"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("ja index should contain %q", want)
 		}

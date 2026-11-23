@@ -24,6 +24,7 @@ type Messages struct {
 	EmptyTail    string // empty-state text after it
 	LoadMore     string
 	AddFeed      string
+	FeedsLabel   string
 }
 
 // UnreadText formats the unread counter, e.g. "未読 3 件" / "3 unread".
@@ -41,6 +42,7 @@ var catalog = map[Lang]Messages{
 		EmptyTail:    ".",
 		LoadMore:     "Load more",
 		AddFeed:      "Add feed",
+		FeedsLabel:   "Feeds",
 	},
 	LangJA: {
 		UnreadFormat: "未読 %d 件",
@@ -51,6 +53,7 @@ var catalog = map[Lang]Messages{
 		EmptyTail:    " を実行してください。",
 		LoadMore:     "もっと読む",
 		AddFeed:      "フィード追加",
+		FeedsLabel:   "フィード",
 	},
 }
 
