@@ -30,6 +30,7 @@ type Messages struct {
 	SaveToNotion string
 	KeySave      string
 	KeyBookmark  string
+	KeyView      string
 	EmptySaved   string
 }
 
@@ -54,6 +55,7 @@ var catalog = map[Lang]Messages{
 		SaveToNotion: "Save to Notion",
 		KeySave:      "read later",
 		KeyBookmark:  "bookmark to Notion",
+		KeyView:      "switch view",
 		EmptySaved:   "Nothing saved yet. Select an entry and press s to save it for later.",
 	},
 	LangJA: {
@@ -71,6 +73,7 @@ var catalog = map[Lang]Messages{
 		SaveToNotion: "Notionに保存",
 		KeySave:      "あとで読む",
 		KeyBookmark:  "Notionに保存",
+		KeyView:      "表示切替",
 		EmptySaved:   "まだ保存した記事がありません。記事を選んで s キーで保存できます。",
 	},
 }

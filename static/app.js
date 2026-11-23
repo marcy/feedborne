@@ -29,7 +29,10 @@
   });
   document.addEventListener('keydown', function (e) {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
-    if (e.key === 'j') {
+    if (e.key === 'l') {
+      var savedView = new URLSearchParams(location.search).get('filter') === 'saved';
+      location.href = savedView ? '/' : '/?filter=saved';
+    } else if (e.key === 'j') {
       select(idx + 1);
     } else if (e.key === 'k') {
       select(idx - 1);

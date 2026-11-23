@@ -119,7 +119,7 @@ templ FeedsSidebar(feeds []Feed, msg Messages, filter string, savedCount int, no
 				<button type="submit">{ msg.AddFeed }</button>
 			</form>
 			<p class="keys">
-				<kbd>j</kbd> { msg.KeyNext } <kbd>k</kbd> { msg.KeyPrev } <kbd>o</kbd> { msg.KeyOpen } <kbd>s</kbd> { msg.KeySave }
+				<kbd>j</kbd> { msg.KeyNext } <kbd>k</kbd> { msg.KeyPrev } <kbd>o</kbd> { msg.KeyOpen } <kbd>s</kbd> { msg.KeySave } <kbd>l</kbd> { msg.KeyView }
 				if notion {
 					<kbd>b</kbd> { msg.KeyBookmark }
 				}

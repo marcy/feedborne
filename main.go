@@ -69,7 +69,7 @@ usage:
   feedborne feed add [-db feedborne.db] <url> register a feed
   feedborne feed list [-db feedborne.db]      list registered feeds
 
-web ui keys: j/k move selection, o open in new tab, s read later, b bookmark to Notion
+web ui keys: j/k move selection, o open in new tab, s read later, l switch view, b bookmark to Notion
 
 optional: set FEEDBORNE_NOTION_TOKEN and FEEDBORNE_NOTION_DATA_SOURCE_ID
 to enable the "bookmark to Notion" button (b key)`)
