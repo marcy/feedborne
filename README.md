@@ -1,5 +1,7 @@
 # feedborne
 
+[![CI](https://github.com/marcy/feedborne/actions/workflows/ci.yml/badge.svg)](https://github.com/marcy/feedborne/actions/workflows/ci.yml)
+
 A small RSS reader written in Go.
 
 - Single binary with subcommands: `crawl` fetches feeds, `serve` runs the web UI
