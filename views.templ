@@ -29,16 +29,20 @@ templ IndexPage(data pageData) {
 				</span>
 			</header>
 			<div class="layout">
-				@FeedsSidebar(data.Feeds, data.Msg)
+				@FeedsSidebar(data.Feeds, data.Msg, data.Filter, data.SavedCount, data.Notion)
 				<main id="list">
 					<div class="col">
 						if len(data.Entries) == 0 {
-							<div class="empty">{ data.Msg.EmptyLead }<code>feedborne crawl</code>{ data.Msg.EmptyTail }</div>
+							if data.Filter == "saved" {
+								<div class="empty">{ data.Msg.EmptySaved }</div>
+							} else {
+								<div class="empty">{ data.Msg.EmptyLead }<code>feedborne crawl</code>{ data.Msg.EmptyTail }</div>
+							}
 						}
 						for _, e := range data.Entries {
-							@EntryItem(e)
+							@EntryItem(e, data.Msg, data.Notion)
 						}
-						@MoreButton(data.HasMore, data.NextOffset, data.Msg)
+						@MoreButton(data.HasMore, data.NextOffset, data.Msg, data.Filter)
 					</div>
 				</main>
 			</div>
@@ -47,11 +51,20 @@ templ IndexPage(data pageData) {
 	</html>
 }
 
-templ EntryItem(e Entry) {
+templ EntryItem(e Entry, msg Messages, notion bool) {
 	<article class={ "entry", templ.KV("read", e.Read) } data-id={ strconv.FormatInt(e.ID, 10) } data-url={ e.URL }>
 		<span class="dot"></span>
 		<div class="entry-body">
-			<div class="meta"><span class="feed">{ e.FeedTitle }</span><span class="time">{ formatTime(e.PublishedAt) }</span></div>
+			<div class="meta">
+				<span class="feed">{ e.FeedTitle }</span>
+				<span class="acts">
+					@SaveButton(e, msg)
+					if notion {
+						@BookmarkButton(e, msg, "")
+					}
+				</span>
+				<span class="time">{ formatTime(e.PublishedAt) }</span>
+			</div>
 			<h2><a href={ templ.URL(e.URL) } target="_blank" rel="noopener">{ e.Title }</a></h2>
 			if e.Description != "" {
 				<p>{ shortText(e.Description, 140) }</p>
@@ -60,21 +73,33 @@ templ EntryItem(e Entry) {
 	</article>
 }
 
-templ MoreButton(hasMore bool, nextOffset int, msg Messages) {
+templ SaveButton(e Entry, msg Messages) {
+	<button type="button" class={ "act save-btn", templ.KV("on", e.Saved) } hx-post={ "/save?id=" + strconv.FormatInt(e.ID, 10) } hx-target="this" hx-swap="outerHTML" title={ msg.ReadLater + " (s)" }>★</button>
+}
+
+templ BookmarkButton(e Entry, msg Messages, errText string) {
+	<button type="button" class={ "act bm-btn", templ.KV("on", e.Bookmarked), templ.KV("err", errText != "") } hx-post={ "/bookmark?id=" + strconv.FormatInt(e.ID, 10) } hx-target="this" hx-swap="outerHTML" title={ bookmarkTitle(msg, errText) }>Notion</button>
+}
+
+templ MoreButton(hasMore bool, nextOffset int, msg Messages, filter string) {
 	if hasMore {
-		<div class="more"><button type="button" hx-get={ "/entries?offset=" + strconv.Itoa(nextOffset) } hx-target="closest div" hx-swap="outerHTML">{ msg.LoadMore }</button></div>
+		<div class="more"><button type="button" hx-get={ entriesURL(nextOffset, filter) } hx-target="closest div" hx-swap="outerHTML">{ msg.LoadMore }</button></div>
 	}
 }
 
 templ EntriesFrag(frag fragData) {
 	for _, e := range frag.Entries {
-		@EntryItem(e)
+		@EntryItem(e, frag.Msg, frag.Notion)
 	}
-	@MoreButton(frag.HasMore, frag.NextOffset, frag.Msg)
+	@MoreButton(frag.HasMore, frag.NextOffset, frag.Msg, frag.Filter)
 }
 
-templ FeedsSidebar(feeds []Feed, msg Messages) {
+templ FeedsSidebar(feeds []Feed, msg Messages, filter string, savedCount int, notion bool) {
 	<aside class="sidebar" id="feedsbar">
+		<nav class="side-nav">
+			<a class={ "nav-row", templ.KV("current", filter != "saved") } href="/">{ msg.AllLabel }</a>
+			<a class={ "nav-row", templ.KV("current", filter == "saved") } href="/?filter=saved">{ msg.ReadLater }<span class="count">{ strconv.Itoa(savedCount) }</span></a>
+		</nav>
 		<div class="side-head">{ msg.FeedsLabel }</div>
 		<nav class="feed-list">
 			for _, f := range feeds {
@@ -89,10 +114,16 @@ templ FeedsSidebar(feeds []Feed, msg Messages) {
 		</nav>
 		<div class="side-foot">
 			<form hx-post="/feeds" hx-target="#feedsbar" hx-swap="outerHTML">
+				<input type="hidden" name="filter" value={ filter }/>
 				<input type="url" name="url" placeholder="https://example.com/feed.rss" required="required"/>
 				<button type="submit">{ msg.AddFeed }</button>
 			</form>
-			<p class="keys"><kbd>j</kbd> { msg.KeyNext } <kbd>k</kbd> { msg.KeyPrev } <kbd>o</kbd> { msg.KeyOpen }</p>
+			<p class="keys">
+				<kbd>j</kbd> { msg.KeyNext } <kbd>k</kbd> { msg.KeyPrev } <kbd>o</kbd> { msg.KeyOpen } <kbd>s</kbd> { msg.KeySave } <kbd>l</kbd> { msg.KeyView }
+				if notion {
+					<kbd>b</kbd> { msg.KeyBookmark }
+				}
+			</p>
 		</div>
 	</aside>
 }

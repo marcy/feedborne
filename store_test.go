@@ -105,6 +105,92 @@ func TestFeedAndEntryFlow(t *testing.T) {
 	}
 }
 
+func TestSaveAndBookmarkFlags(t *testing.T) {
+	db := testDB(t)
+	if err := addFeed(db, "https://example.com/feed.rss"); err != nil {
+		t.Fatalf("addFeed: %v", err)
+	}
+	feeds, _ := listFeeds(db)
+	if _, err := insertEntry(db, feeds[0].ID, "g1", "https://example.com/1", "First", "", nil); err != nil {
+		t.Fatalf("insertEntry: %v", err)
+	}
+	if _, err := insertEntry(db, feeds[0].ID, "g2", "https://example.com/2", "Second", "", nil); err != nil {
+		t.Fatalf("insertEntry: %v", err)
+	}
+	entries, _ := latestEntries(db, 10, 0)
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	id := entries[0].ID
+
+	if n, err := savedCount(db); err != nil || n != 0 {
+		t.Fatalf("savedCount before: n=%d err=%v", n, err)
+	}
+	if err := setSaved(db, id, true); err != nil {
+		t.Fatalf("setSaved: %v", err)
+	}
+	if err := setBookmarked(db, id, true); err != nil {
+		t.Fatalf("setBookmarked: %v", err)
+	}
+	got, err := getEntry(db, id)
+	if err != nil {
+		t.Fatalf("getEntry: %v", err)
+	}
+	if !got.Saved || !got.Bookmarked {
+		t.Errorf("expected saved+bookmarked, got %+v", got)
+	}
+	saved, err := savedEntries(db, 10, 0)
+	if err != nil || len(saved) != 1 || saved[0].ID != id {
+		t.Errorf("savedEntries: %v %+v", err, saved)
+	}
+	if n, _ := savedCount(db); n != 1 {
+		t.Errorf("savedCount after: %d", n)
+	}
+	if err := setSaved(db, id, false); err != nil {
+		t.Fatalf("setSaved off: %v", err)
+	}
+	if saved, _ := savedEntries(db, 10, 0); len(saved) != 0 {
+		t.Errorf("savedEntries after unsave: %d", len(saved))
+	}
+}
+
+// TestMigrateOldDatabase opens a database created with the original
+// schema (no bookmarked/saved columns) and expects openDB to add them.
+func TestMigrateOldDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open raw: %v", err)
+	}
+	oldSchema := `
+CREATE TABLE feeds (id INTEGER PRIMARY KEY, url TEXT NOT NULL UNIQUE, title TEXT NOT NULL DEFAULT '', etag TEXT NOT NULL DEFAULT '', last_modified TEXT NOT NULL DEFAULT '', last_fetched_at TIMESTAMP);
+CREATE TABLE entries (id INTEGER PRIMARY KEY, feed_id INTEGER NOT NULL REFERENCES feeds(id), guid TEXT NOT NULL, url TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', published_at TIMESTAMP, fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, read INTEGER NOT NULL DEFAULT 0, UNIQUE(feed_id, guid));`
+	if _, err := raw.Exec(oldSchema); err != nil {
+		t.Fatalf("create old schema: %v", err)
+	}
+	raw.Close()
+
+	db, err := openDB(path)
+	if err != nil {
+		t.Fatalf("openDB on old database: %v", err)
+	}
+	defer db.Close()
+	if err := addFeed(db, "https://example.com/feed.rss"); err != nil {
+		t.Fatalf("addFeed: %v", err)
+	}
+	feeds, _ := listFeeds(db)
+	if _, err := insertEntry(db, feeds[0].ID, "g1", "https://example.com/1", "First", "", nil); err != nil {
+		t.Fatalf("insertEntry: %v", err)
+	}
+	entries, err := latestEntries(db, 10, 0)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("latestEntries on migrated db: %v (%d entries)", err, len(entries))
+	}
+	if err := setSaved(db, entries[0].ID, true); err != nil {
+		t.Fatalf("setSaved on migrated db: %v", err)
+	}
+}
+
 func TestShortTextAndFormatTime(t *testing.T) {
 	if got := shortText("あいうえお", 3); got != "あいう…" {
 		t.Errorf("shortText multibyte: got %q", got)

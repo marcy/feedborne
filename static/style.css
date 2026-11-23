@@ -149,6 +149,33 @@ main::-webkit-scrollbar-thumb, .feed-list::-webkit-scrollbar-thumb {
   background: var(--line); border-radius: 5px; border: 2px solid var(--bg);
 }
 
+/* Sidebar navigation (All entries / Read later) */
+.side-nav { padding: 12px 8px 4px; display: flex; flex-direction: column; gap: 2px; }
+.nav-row {
+  display: flex; align-items: center; padding: 6px 8px; border-radius: 6px;
+  font-size: 13px; color: var(--text); text-decoration: none; line-height: 1.4;
+}
+.nav-row:hover { background: var(--hover); }
+.nav-row.current { background: var(--panel); font-weight: 650; }
+.nav-row .count {
+  margin-left: auto; font-size: 11px; color: var(--muted);
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: 999px; padding: 0 7px; line-height: 1.7;
+}
+
+/* Entry action buttons (read later / Notion bookmark) */
+.entry .meta .acts { margin-left: auto; display: flex; gap: 2px; flex: none; }
+.entry .meta .time { margin-left: 10px; }
+.act {
+  background: transparent; border: 1px solid transparent; color: var(--muted);
+  border-radius: 4px; padding: 0 6px; font-size: 11px; line-height: 1.7;
+  cursor: pointer; font-family: inherit;
+}
+.act:hover { border-color: var(--line); color: var(--text); }
+.act.on { color: var(--accent); border-color: var(--accent-dim); }
+.act.err { color: #d66; border-color: #d66; }
+.save-btn { font-size: 12px; }
+
 @media (max-width: 760px) {
   body { height: auto; overflow: auto; }
   .layout { display: block; }
