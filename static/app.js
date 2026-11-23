@@ -18,17 +18,25 @@
       swap: 'innerHTML'
     });
   }
+  function revealSelection() {
+    // Keep the entry after the selected one on screen too, so the
+    // next j press never lands on an entry that starts off-screen.
+    var next = entries[idx + 1];
+    if (next) next.scrollIntoView({ block: 'nearest' });
+    entries[idx].scrollIntoView({ block: 'nearest' });
+  }
   function select(i) {
     if (!entries.length) return;
     entries[idx].classList.remove('selected');
     idx = Math.max(0, Math.min(entries.length - 1, i));
     entries[idx].classList.add('selected');
-    entries[idx].scrollIntoView({ block: 'nearest' });
+    revealSelection();
     markRead(entries[idx]);
   }
   collect();
   if (entries.length) {
     entries[0].classList.add('selected');
+    revealSelection();
     markRead(entries[0]);
   }
   document.body.addEventListener('htmx:afterSwap', function () {
